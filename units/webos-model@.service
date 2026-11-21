@@ -1,0 +1,13 @@
+[Unit]
+Description=WebOS inference worker (%i)
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/.local/share/webos-services/bin/run-model %i
+NoNewPrivileges=yes
+UMask=0077
+TimeoutStopSec=300
+KillMode=control-group
+
+[Install]
+WantedBy=default.target

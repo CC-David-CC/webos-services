@@ -1,0 +1,63 @@
+#!/usr/bin/python3
+"""Single-user Unix-socket adapter for the Image Studio stdin/stdout renderer."""
+import os
+from pathlib import Path
+import signal
+import socket
+import subprocess
+import sys
+
+address=str(Path(os.environ['XDG_RUNTIME_DIR'])/'webos-flux.sock')
+maximum_input=6*1024*1024
+maximum_output=5*1024*1024
+
+def read(sock,limit):
+    with sock.makefile('rb') as stream:
+        value=stream.read(limit+1)
+        if len(value)>limit:raise ValueError('Size limit exceeded')
+        return value
+
+def serve(command):
+    os.umask(0o077)
+    stopping=False
+    def stop(*_):
+        nonlocal stopping
+        stopping=True
+    signal.signal(signal.SIGTERM,stop)
+    with socket.socket(socket.AF_UNIX) as listener:
+        listener.bind(address);listener.listen(2);listener.settimeout(1)
+        try:
+            while not stopping:
+                try: conn,_=listener.accept()
+                except socket.timeout: continue
+                with conn:
+                    try:
+                        conn.settimeout(20)
+                        payload=read(conn,maximum_input)
+                        result=subprocess.run(command,input=payload,stdout=subprocess.PIPE,
+                                              stderr=subprocess.DEVNULL,timeout=240)
+                        ok=result.returncode==0 and 0<len(result.stdout)<=maximum_output
+                        conn.sendall(b'Y'+result.stdout if ok else b'N')
+                    except (OSError,subprocess.SubprocessError,ValueError):
+                        try: conn.sendall(b'N')
+                        except OSError: pass
+        finally: Path(address).unlink(missing_ok=True)
+
+if sys.argv[1:2]==['serve'] and len(sys.argv)>2:
+    serve(sys.argv[2:])
+elif sys.argv[1:]==['submit']:
+    data=sys.stdin.buffer.read(maximum_input+1)
+    if len(data)>maximum_input:sys.exit(1)
+    with socket.socket(socket.AF_UNIX) as client:
+        client.settimeout(260)
+        try:client.connect(address)
+        except OSError:sys.exit(1)
+        try:
+            client.sendall(data);client.shutdown(socket.SHUT_WR)
+            response=read(client,maximum_output+1)
+        except OSError:sys.exit(255)
+        if not response:sys.exit(255)
+        if response[:1]!=b'Y':sys.exit(1)
+        sys.stdout.buffer.write(response[1:])
+else:
+    raise SystemExit('Use serve COMMAND or submit')

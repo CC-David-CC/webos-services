@@ -1,0 +1,20 @@
+#!/usr/bin/python3
+"""Execute the operator's local model profile without shell expansion."""
+import json
+import os
+from pathlib import Path
+import re
+import sys
+
+profile=sys.argv[1]
+if not re.fullmatch(r'[a-zA-Z0-9_-]{1,64}', profile):
+    raise SystemExit('Invalid profile name')
+cfg=Path.home()/'.config/webos-services/models'/(profile+'.json')
+settings=json.loads(cfg.read_text())
+argv=settings['argv']
+if not isinstance(argv,list) or not argv or not all(isinstance(arg,str) for arg in argv):
+    raise SystemExit('Expected an argv array')
+if not Path(argv[0]).is_absolute():
+    raise SystemExit('Use an absolute executable path')
+os.chdir(settings.get('cwd',Path.home()))
+os.execv(argv[0],argv)
