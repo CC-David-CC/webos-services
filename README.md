@@ -5,7 +5,7 @@ This repository holds the user-level Linux units and launchers for WebOS GPU com
 | Service | Runs on | What it starts | WebOS consumer |
 |---|---|---|---|
 | webos-gpu-monitor.service | GPU machines | A local sampler for GPU utilization, VRAM and identifiable model processes | GPU Monitor under System Tools |
-| webos-model@PROFILE.service | A machine with that local profile installed | The inference command specified by the operator | Image Studio for image rendering. Text and 3D clients need matching queue routes. |
+| [`webos-model@PROFILE.service`](units/webos-model@.service) | A machine with that local profile installed | The inference command specified by the operator | Image Studio for image rendering. Text and 3D clients need matching queue routes. |
 | Existing PCC and Strata units | Hosts that already provide them | Their own model runtimes and settings | Eligible for routing after worker qualification |
 
 Clone the repository and run `python3 install.py` from the checkout as the service user. This installs the units in the user systemd manager. Start telemetry with `systemctl --user enable --now webos-gpu-monitor.service`. Use `systemctl --user status webos-gpu-monitor.service` to check it. The sampler replaces its latest record in the user runtime directory. It keeps no series or history.
