@@ -1,0 +1,21 @@
+#!/usr/bin/python3
+"""Reconcile indeterminate jobs after an operator confirms execution stopped."""
+import argparse
+from contextlib import closing
+from pathlib import Path
+import sqlite3
+import time
+
+p=argparse.ArgumentParser(description=__doc__)
+p.add_argument('database',type=Path)
+p.add_argument('--confirm-stopped',metavar='JOB')
+args=p.parse_args()
+with closing(sqlite3.connect(args.database.resolve().as_uri()+'?mode=rw',uri=True)) as db, db:
+    if args.confirm_stopped:
+        changed=db.execute("UPDATE jobs SET state='failed', input=NULL,output=NULL,finished=? WHERE id=? AND state='uncertain'",
+                           (time.time(),args.confirm_stopped)).rowcount
+        if changed!=1:raise SystemExit('Expected exactly one uncertain job')
+        print('Slot released. The next queued job is eligible.')
+    else:
+        for (job,) in db.execute("SELECT id FROM jobs WHERE state='uncertain' ORDER BY rowid"):
+            print(job)

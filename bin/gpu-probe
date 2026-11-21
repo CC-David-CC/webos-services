@@ -24,6 +24,17 @@ def process_model(pid):
         args = Path(f'/proc/{int(pid)}/cmdline').read_bytes().decode(errors='replace').split('\0')
     except (OSError, ValueError):
         return None
+    # Managed service identity is operator-owned. Only GPU compute PIDs reach this code.
+    try:
+        group=Path(f'/proc/{int(pid)}/cgroup').read_text()
+        match=re.search(r'/webos-model@([A-Za-z0-9_-]+)\.service(?:/|$)',group,re.M)
+        if match:
+            profile=Path.home()/'.config/webos-services/models'/(match[1]+'.json')
+            cfg=json.loads(profile.read_bytes())
+            if isinstance(cfg.get('model'),str):
+                return {'model':cfg['model'][:120], 'precision':str(cfg.get('precision','Unknown'))[:32]}
+    except (OSError,ValueError):
+        pass
     flags = ('-m', '--model', '--model-path')
     for i, arg in enumerate(args):
         name, sep, value = arg.partition('=')
@@ -36,6 +47,27 @@ def process_model(pid):
         quant = re.search(r'(?:^|[-._])((?:I?Q\d+(?:_[A-Z0-9]+)*)|BF16|FP16|F16|FP8)(?=[-.]|$)',leaf,re.I)
         return {'model':leaf,'precision':quant.group(1) if quant else None}
     return None
+
+
+def amd_managed_models(pci):
+    # amdgpu exposes per-process VRAM accounting through drm fdinfo. Check only
+    # operator-managed cgroups, without requesting access to other users' processes.
+    groups=Path('/sys/fs/cgroup/user.slice')/f'user-{os.getuid()}.slice'/f'user@{os.getuid()}.service'
+    found=[]
+    for group in groups.glob('**/webos-model@*.service'):
+        try: pids=(group/'cgroup.procs').read_text().split()
+        except OSError: continue
+        for pid in pids:
+            for info in Path('/proc',pid,'fdinfo').glob('*'):
+                try:
+                    values=dict(line.split(':',1) for line in info.read_text().splitlines() if ':' in line)
+                    if values.get('drm-pdev','').strip()!=pci:continue
+                    if int(values.get('drm-memory-vram','0').split()[0])<=0:continue
+                except (OSError,ValueError,IndexError):continue
+                label=process_model(pid)
+                if label and label not in found:found.append(label)
+                break
+    return found or None
 
 
 def snapshot():
@@ -59,7 +91,7 @@ def snapshot():
             if len(names)>=4:name=names[3]
         cards.append(dict(id=device.parent.name,name=name,usedMiB=int((device/'mem_info_vram_used').read_text())//1048576,
                           totalMiB=int((device/'mem_info_vram_total').read_text())//1048576,
-                          utilization=number((device/'gpu_busy_percent').read_text().strip()), workloads=None))
+                          utilization=number((device/'gpu_busy_percent').read_text().strip()), workloads=amd_managed_models(pci)))
     return {'version':1,'sampledAt':int(time.time()),'devices':cards}
 
 

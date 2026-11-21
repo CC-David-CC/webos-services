@@ -23,3 +23,7 @@ Use `systemctl --user start webos-model@example`, `stop`, `restart`, or `status`
 The image adapter uses an owner-only Unix socket and the independently installed Image Studio renderer. Its profile invokes `bin/image-worker serve /absolute/venv/bin/python /absolute/render.py` with Python. The gateway invokes the adapter's `submit` command. Runtime operations stay on the operator machine. Browser clients submit signed jobs to WebOS.
 
 The WebOS parent also owns the viewer backend packaging and the test-account maintenance timer. Their source lives in the parent under `deploy/`. Existing host-specific PCC and Strata installations remain independently managed.
+
+## Recovering an interrupted remote job
+
+On the coordinator, `bin/reconcile-job /path/to/compute-jobs.sqlite3` lists indeterminate job IDs. Check whether execution has actually stopped on the worker first. Once verified, add `--confirm-stopped JOB` to mark that job failed and release its account and worker slots. The scheduler picks up the next waiting job. A queued or running job cannot be cleared with this command.

@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 import signal
+import stat
 import socket
 import subprocess
 import sys
@@ -25,6 +26,17 @@ def serve(command):
         stopping=True
     signal.signal(signal.SIGTERM,stop)
     with socket.socket(socket.AF_UNIX) as listener:
+        try:
+            info=os.lstat(address)
+        except FileNotFoundError:
+            info=None
+        if info:
+            if not stat.S_ISSOCK(info.st_mode) or info.st_uid!=os.getuid():
+                raise RuntimeError('Unexpected socket path')
+            with socket.socket(socket.AF_UNIX) as check:
+                try:check.connect(address)
+                except ConnectionRefusedError:os.unlink(address)
+                else:raise RuntimeError('Image worker is already running')
         listener.bind(address);listener.listen(2);listener.settimeout(1)
         try:
             while not stopping:
