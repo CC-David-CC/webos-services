@@ -10,6 +10,10 @@ This repository holds the user-level Linux units and launchers for WebOS GPU com
 
 Clone the repository and run `python3 install.py` from the checkout as the service user. This installs the units in the user systemd manager. Start telemetry with `systemctl --user enable --now webos-gpu-monitor.service`. Use `systemctl --user status webos-gpu-monitor.service` to check it. The sampler replaces its latest record in the user runtime directory. It keeps no series or history.
 
+## GPU Monitor
+
+The signed-in GPU Monitor shows the samples supplied by these services and queue totals from the WebOS coordinator. Its browser review includes the four-host view and screenshots at phone, tablet, 1080p and 4K sizes. [GPU Monitor screenshots and review](https://github.com/CC-David-CC/gpu-monitor#browser-review)
+
 ## Model profiles
 
 Create a private file at `~/.config/webos-services/models/example.json` with an absolute executable and arguments, for example:
